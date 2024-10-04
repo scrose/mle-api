@@ -66,6 +66,10 @@ web_modules/
 # Optional REPL history
 .node_repl_history
 
+# Misc files/folders
+.vscode/
+.DS_Store
+
 # Output of 'npm pack'
 *.tgz
 
