@@ -259,13 +259,28 @@ export const validate = async (access_token) => {
 }
 
 /**
- * Validate access token in session cookie with Keycloak server.
+ * Refreshes the user's session token.
  *
  * @public
- * @return {Promise} JSON web token
+ * @return {Promise} a JSON object with user data, or null if no token found
  * @param req
+ *
+ * If the refresh token is invalid or has expired, a 'noauth' error is thrown.
+ * If the KeyCloak server does not respond with a 200 status, or if the response
+ * is not valid JSON, the function returns null.
+ *
+ * The returned object has the following structure:
+ *
+ * {
+ *   access_token: string
+ *   refresh_token: string
+ *   email: string
+ *   roles: string[]
+ * }
+ *
+ * The access token is a JSON Web Token containing user data, which is extracted
+ * and appended to the returned object.
  */
-
 export const refresh = async (req) => {
 
     // get tokens from cookie
@@ -307,6 +322,7 @@ export const refresh = async (req) => {
         // append user email, roles to fetched data
         data.email = decoded.email;
         data.roles = decoded.resource_access[settings.clientId].roles;
+        data.exp = decoded.exp;
     }
     return data;
 

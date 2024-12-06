@@ -35,8 +35,7 @@ import { allowedImageMIME, allowedMIME } from "../lib/file.utils.js";
 import { genUUID } from '../lib/data.utils.js';
 import fs from 'fs';
 import path from 'path';
-import { createFile } from './construct.services.js';
-
+import { getConstructors } from './construct.services.js'; 
 /**
  * Receive a multi-part form data and parse it into files and fields.
  *
@@ -44,7 +43,8 @@ import { createFile } from './construct.services.js';
  * @param {Object} req - Node request object.
  * @param {Function} [callback] - Callback function.
  */
-export const receive = (req, callback) => {
+export const receive = async (req, model, owner, callback) => {
+
     /**
      * create busboy instance to parse form data
      */
@@ -52,6 +52,9 @@ export const receive = (req, callback) => {
     const files = [];
     const fields = [];
 
+    // generate model constructors
+    const constructors = await getConstructors();
+    
     /**
      * Abort the request and send 413 status code
      * @private
@@ -73,7 +76,7 @@ export const receive = (req, callback) => {
     /**
      * Parse file data
      */
-    bb.on('file', (name, file, info) => { onFile(name, file, info, files, abort) });
+    bb.on('file', (name, file, info) => { onFile(name, file, info, files, abort, constructors) });
 
     /**
      * Parse field data
@@ -94,21 +97,34 @@ export const receive = (req, callback) => {
          * Matches fields with their corresponding file objects based on the index property.
          */
 
-        const result = {
-            files: files.map((file) => {
-                const { index } = file;
+        const metadata = fields.reduce((acc, field) => {
+            if (field.index === null) {
+                acc[field.name] = field.value;
+            }
+            return acc;
+        }, {});
+        // include owner data to model metadata
+        metadata.owner_id = owner?.id;
+        metadata.owner_type = owner?.type;
+
+        // Return parsed multi-part data as model instances
+        const result = { 
+            model: model.setData(metadata),
+            files: files.map(({index, file, file_type, encoding}) => {
+                // filter metadata fields attached to files by index
                 const matchedFields = fields.filter((field) => field.index === index);
-                const fileTypeObject = matchedFields.reduce((acc, field) => {
+                const fileModelData = matchedFields.reduce((acc, field) => {
                   acc[field.name] = field.value;
                   return acc;
                 }, {});
-                return { ...file, metadata: fileTypeObject };
-            }), metadata: fields.reduce((acc, field) => {
-                if (field.index === null) {
-                    acc[field.name] = field.value;
-                }
-                return acc;
-            }, {})
+                return { 
+                    file: new constructors['files'](file), 
+                    file_model: new constructors[file_type](fileModelData),
+                    file_type: file_type, 
+                    encoding: encoding
+                };
+            }),
+            owner: owner
         }
         /**
          * Return parsed multi-part data
@@ -170,8 +186,8 @@ export const onFile = (name, file, info, files, abort) => {
 
         // Create a temporary file for the file
         const safeFilename = filename.replace(/[^\w\s.-]+/g, '_');
-        const saveTo = path.join(process.env.TMP_DIR, genUUID());
-        file.pipe(fs.createWriteStream(saveTo));
+        const filename_tmp = genUUID();
+        file.pipe(fs.createWriteStream(path.join(process.env.TMP_DIR, filename_tmp)));
 
         // Create a readable stream for the file
         let fileSize = 0;
@@ -186,20 +202,18 @@ export const onFile = (name, file, info, files, abort) => {
         });
 
         // Add the file to the files array
-        files.push({
+        files.push({ 
             index,
-            file: createFile(
-                {
-                    file_type: fileType,
-                    filename: safeFilename,
-                    mimetype: mimeType,
-                    owner_type='',
-                    owner_id='',
-                    fs_path: null,
-                    file_size: fileSize,
-                    filename_tmp: saveTo
-                }),
-            metadata: {},
+            file: {
+                file_type: fileType,
+                filename: safeFilename,
+                mimetype: mimeType,
+                owner_type:'',
+                owner_id:'',
+                fs_path: null,
+                file_size: fileSize,
+                filename_tmp: filename_tmp
+            },
             file_type: fileType,
             encoding
         });

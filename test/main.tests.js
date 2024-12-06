@@ -10,9 +10,9 @@
  * @private
  */
 
-import { server, BASE_URL } from './setup.js';
-import { expect } from 'chai';
+import { app, BASE_URL } from './setup.js';
 import { describe, it } from 'mocha';
+import request from 'supertest';
 
 /**
  * Test index page
@@ -21,8 +21,9 @@ import { describe, it } from 'mocha';
 
 describe('Index page test', () => {
   it('Gets base url', async () => {
-    const res = await server.get(BASE_URL);
-    expect(res.status).to.equal(200);
+    request(app)
+      .get(BASE_URL)
+      .expect(200);
   });
 });
 

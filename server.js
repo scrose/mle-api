@@ -130,6 +130,11 @@ createApp().then((app) => {
     process.exit(1);
   });
 
+  process.on('unhandledRejection', (reason, promise) => {
+    throw new Error(`Unhandled Rejection, ${promise}\nReason: ${reason}`);
+  });
+
+
 }).catch((err) => {
   console.error(err);
 });

@@ -3,10 +3,9 @@
  * File: users.routes.js
  * Copyright(c) 2021 Runtime Software Development Inc.
  * MIT Licensed
- */
-
-/**
- * Module dependencies
+ * 
+ * Description
+ * User data routes.
  */
 
 import * as auth from '../controllers/auth.controller.js'

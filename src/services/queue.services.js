@@ -20,8 +20,27 @@
 import dotenv from 'dotenv';
 import Queue from "bull";
 import redis from "redis";
+import fetch from 'node-fetch';
 dotenv.config();
 
+
+/**
+ * Asynchronous function to check if the queue server is ready.
+ * @returns {Promise<boolean>} a promise that resolves to true if the queue server is ready, false otherwise
+ */
+async function isQueueServerReady() {
+  try {
+    // construct the URL to the server
+    const url = `${process.env.QUEUE_HOST}:${process.env.QUEUE_PORT}/`;
+    // make a request to the server and wait for the response
+    const response = await fetch(url);
+    // if the response is OK, the server is ready
+    return response.ok;
+  } catch (error) {
+    // if there is an error, the server is not ready
+    return false;
+  }
+}
 
 /**
  * Connect to Redis message broker
@@ -29,7 +48,7 @@ dotenv.config();
  * @private
  */
 
-const queueName = 'imageProcessor';
+const queueName = 'file_processor';
 
 let queue = new Queue(queueName, {
     redis: {
@@ -70,6 +89,10 @@ export const getQueueJobs = async () => {
     try {
         const res = await queue.getJobs(null, 0, 1000, true);
         return {
+            status: {
+                server: await isQueueServerReady(),
+                redis: await queue.client.ping() === 'PONG'
+            },
             counts: await queue.getJobCounts(['active', 'completed', 'delayed', 'failed', 'waiting']),
             data: await Promise.all((res || []).map(async (job) => {
                 const state = await job.getState();

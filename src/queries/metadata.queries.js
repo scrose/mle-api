@@ -269,11 +269,11 @@ export function getStationStatus(id=0) {
         svr.nodes_id as surveyors,
         svy.nodes_id as surveys,
         svs.nodes_id as survey_seasons,
-        COUNT(DISTINCT hc.nodes_id) as n_hc,
-        COUNT(DISTINCT mc.nodes_id) as n_mc,
-        COUNT(DISTINCT cmp.id) as n_comparisons,
-        (COUNT(DISTINCT (CASE WHEN hi.image_state = 'master' AND hi.owner_id = cmp.historic_captures then cmp.historic_captures end) )) as hc_mastered,
-        (COUNT(DISTINCT (CASE WHEN mi.image_state = 'master' AND mi.owner_id = cmp.modern_captures then cmp.modern_captures end) )) as mc_mastered,
+        COUNT(DISTINCT hc.nodes_id)::INT as n_hc,
+        COUNT(DISTINCT mc.nodes_id)::INT as n_mc,
+        COUNT(DISTINCT cmp.id)::INT as n_comparisons,
+        (COUNT(DISTINCT (CASE WHEN hi.image_state = 'master' AND hi.owner_id = cmp.historic_captures then cmp.historic_captures end) ))::INT as hc_mastered,
+        (COUNT(DISTINCT (CASE WHEN mi.image_state = 'master' AND mi.owner_id = cmp.modern_captures then cmp.modern_captures end) ))::INT as mc_mastered,
         CASE WHEN COUNT(DISTINCT hc.nodes_id) > 0 AND stn.lat isnull AND stn.lng isnull then true else false end AS grouped,
         CASE WHEN COUNT(DISTINCT hc.nodes_id) > 0 AND stn.lat notnull AND stn.lng notnull then true else false end AS located,
         CASE WHEN COUNT(DISTINCT cmp.id) > 0 then true else false end AS repeated,
@@ -283,10 +283,10 @@ export function getStationStatus(id=0) {
         COUNT(DISTINCT cmp.id) >= COUNT(DISTINCT hc.nodes_id) 
             AND COUNT(DISTINCT (
                     CASE WHEN hi.image_state = 'master' AND hi.owner_id = cmp.historic_captures then cmp.historic_captures end)
-                ) = COUNT(DISTINCT cmp.id)
+                ) = COUNT(DISTINCT cmp.id)::INT
             AND COUNT(DISTINCT (
                     CASE WHEN hi.image_state = 'master' AND hi.owner_id = cmp.historic_captures then cmp.historic_captures end
-                )) = COUNT(DISTINCT hc.nodes_id) as mastered
+                )) = COUNT(DISTINCT hc.nodes_id)::INT as mastered
         FROM historic_captures hc
             LEFT JOIN comparison_indices cmp ON cmp.historic_captures = hc.nodes_id
             LEFT JOIN historic_images hi ON hi.owner_id = hc.nodes_id

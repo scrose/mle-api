@@ -1,7 +1,7 @@
 /*!
  * MLP.API.Services.Other
  * File: other.services.js
- * Copyright(c) 2021 Runtime Software Development Inc.
+ * Copyright(c) 2024 Runtime Software Development Inc.
  * MIT Licensed
  */
 
@@ -12,7 +12,6 @@
  * @private
  */
 
-import pool from './db.services.js';
 import queries from '../queries/index.queries.js';
 import * as nserve from "./nodes.services.js";
 

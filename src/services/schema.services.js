@@ -21,12 +21,12 @@
 
 import pool from './db.services.js';
 import queries from '../queries/index.queries.js';
-import {humanize} from '../lib/data.utils.js';
+import {groupBy, humanize} from '../lib/data.utils.js';
 import { participantGroupTypes } from '../queries/metadata.queries.js';
 
 /**
  * Export schema constructor. A schema instance is a
- * wrapper to serve table information about a model.
+ * wrapper to encapsulate the data model.
  *
  * @public
  * @param {String} constructorType
@@ -60,7 +60,7 @@ export const create = async (constructorType) => {
                 || constructorType === 'nodes'
                 || constructorType === 'files')
         )
-            next('invalidConstructorType');
+            throw Error('invalidConstructorType');
 
         // set identifier key based on model attributes.
         const idKey = (attributes == null || attributes.hasOwnProperty('files_id'))
@@ -135,7 +135,7 @@ export const create = async (constructorType) => {
 
     } catch (err) {
         console.error(err)
-        return next(err);
+        throw Error(err);
     } finally {
         await client.release(true);
     }
@@ -215,6 +215,25 @@ export const getFileTypes = async function(client) {
 
     // return only model type names as list
     return fileTypes.rows.map(fileType => { return fileType.name });
+};
+
+/**
+ * Get owner type for given file type.
+ * Allows looking up owner type by file type or file type by owner type.
+ *
+ * @public
+ * @return {Promise} result
+ */
+
+export const getFileOwnerType = async function(client) {
+    let { sql, data } = queries.files.relations();
+    let fileRelations = await client.query(sql, data);
+
+    // return only model type names as list
+    return {
+        'files': groupBy(fileRelations.rows, 'dependent_type'),
+        'nodes': groupBy(fileRelations.rows, 'owner_type')
+    };
 };
 
 /**

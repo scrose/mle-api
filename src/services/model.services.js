@@ -18,6 +18,7 @@ import * as nqueries from '../queries/nodes.queries.js';
 import * as cserve from '../services/construct.services.js';
 import {moveFiles, removeAll} from "./files.services.js";
 import * as fserve from "./files.services.js";
+import st from 'st';
 
 /**
  * Export database model services constructor
@@ -101,7 +102,12 @@ export default function ModelServices(model) {
         };
 
         // execute transaction
-        return await this.transact(item, stmts);
+        const result = await this.transact(item, stmts);
+
+        // update item data
+        item.setData(result)
+
+        return result ? item : null;
     };
 
     /**
@@ -180,7 +186,7 @@ export default function ModelServices(model) {
 
     this.remove = async function(item=[], client) {
         // get attached files
-        const files = await fserve.selectByOwner(item.id, client) || [];
+        const files = await fserve.selectByOwner(item?.id, client) || [];
 
         let stmts = {
             node: nqueries.remove,
@@ -227,7 +233,6 @@ export default function ModelServices(model) {
 
                 // generate prepared statements collated with data
                 const {sql, data} = stmts.node(node);
-                console.log(sql, data)
                 res = await client.query(sql, data);
 
                 // update item with returned data for further processing
@@ -248,10 +253,11 @@ export default function ModelServices(model) {
                 : null;
 
         } catch (err) {
+            console.error(err);
             await client.query('ROLLBACK');
             throw err;
         } finally {
-            await client.release(true);
+            client.release(true);
         }
     };
 }

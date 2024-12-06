@@ -80,8 +80,8 @@ function FilesRoutes(modelType) {
             path: path.join('/', this.model, 'remove', ':' + this.key),
             get: null,
             put: null,
-            post: this.controller.remove,
-            delete: null,
+            post: null,
+            delete: this.controller.remove,
         },
         raw: {
             path: '/files/download/raw',

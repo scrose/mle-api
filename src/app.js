@@ -100,7 +100,7 @@ export default async () => {
     // enable CORS
     app.use(cors({
         origin: allowedOrigins,
-        methods: ['GET', 'POST'],
+        methods: ['GET', 'POST', 'DELETE'],
         preflightContinue: false,
         optionsSuccessStatus: 200,
         allowedHeaders: ['Content-Type', 'Authorization'],

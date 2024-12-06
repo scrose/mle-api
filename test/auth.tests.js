@@ -15,11 +15,12 @@
  * @private
  */
 
-import { server, BASE_URL } from './setup.js';
-import { expect } from 'chai';
+import { app, BASE_URL } from './setup.js';
 import { it, describe } from 'mocha';
+import { expect } from 'chai';
 import { errors } from '../src/error.js';
 import path from 'path';
+import request from 'supertest';
 
 /**
  * Get admin user data.
@@ -39,82 +40,90 @@ let cookie;
  * @private
  */
 
+
 describe('Login Administrator', () => {
     it('Authenticate wrong email should fail', async () => {
-        const res = await server
-            .post(path.join(BASE_URL, 'login'))
-            .set('Accept', 'application/json')
-            .send({
+        request(app)
+        .post(path.join(BASE_URL, 'login'))
+        .set('Accept', 'application/json')
+        .send({
                 email: 'wrong@example.ca',
                 password: admin.password
-            });
-        expect(res).to.have.status(422);
-        expect(res.body.message.msg).to.equal(errors.invalidCredentials.msg);
+            })
+        .expect(422)
+        .expect((res) => {
+            expect(res.body.message.msg).to.equal(errors.invalidCredentials.msg)
+        });
     });
+        
 
     it('Authenticate wrong password should fail', async () => {
-        const res = await server
+        request(app)
             .post(path.join(BASE_URL, 'login'))
             .set('Accept', 'application/json')
             .send({
                 email: admin.email,
                 password: 'WRONG5565lSSR!3323'
+            })
+            .expect(422)
+            .expect((res) => {
+                expect(res.body.message.msg).to.equal(errors.invalidCredentials.msg)
             });
-        expect(res).to.have.status(422);
-        expect(res.body.message.msg).to.equal(errors.invalidCredentials.msg);
     });
 
     it('Authenticate correct credentials', async () => {
-        const res = await server
+        const res = await request(app)
             .post(path.join(BASE_URL, 'login'))
             .set('Accept', 'application/json')
             .send({
                 email: admin.email,
                 password: admin.password
+            })
+            .expect(200)
+            .expect((res) => {
+                expect(res.body.message.msg).to.equal('Login successful!')
             });
 
         // store access/refresh tokens
         cookie = res.headers["set-cookie"];
-        expect(res).to.have.status(200);
-        expect(res.body.message.msg).to.equal('Login successful!');
 
     });
 
     it('Redundant login', async () => {
-        const res = await server
+        request(app)
             .post(path.join(BASE_URL, 'login'))
             .set('Accept', 'application/json')
             .set('Cookie', cookie)
             .send({
                 email: admin.email,
                 password: admin.password
+            })
+            .expect(422)
+            .expect((res) => {
+                expect(res.body.message.msg).to.equal(errors.redundantLogin.msg)
             });
-        expect(res).to.have.status(422);
-        expect(res.body.message.msg).to.equal(errors.redundantLogin.msg);
 
     });
 
     it('Should refresh token', async () => {
-        const res = await server
+        request(app)
             .post(path.join(BASE_URL, 'refresh'))
             .set('Accept', 'application/json')
             .set('Cookie', cookie)
-            .send();
-
-        expect(res).to.have.status(200);
-        expect(res.body.message.msg).to.equal('Token refreshed.');
-
+            .expect(200)
+            .expect((res) => {
+                expect(res.body.message.msg).to.equal('Token refreshed.')
+            });
     });
 
     it('Should logout user', async () => {
-        const res = await server
+        request(app)
             .post(path.join(BASE_URL, 'logout'))
             .set('Accept', 'application/json')
             .set('Cookie', cookie[0])
-            .send();
-
-        expect(res).to.have.status(200);
-        expect(res.body.message.msg).to.equal('Successfully logged out!');
-
+            .expect(200)
+            .expect((res) => {
+                expect(res.body.message.msg).to.equal('Successfully logged out!')
+            });
     });
 });

@@ -61,7 +61,7 @@ export const create = async (modelType) => {
     const schema = new Schema();
 
     // return constructor
-    return function(attributeValues) {
+    return function (attributeValues) {
 
         // static variables
         this.name = modelType;
@@ -76,7 +76,7 @@ export const create = async (modelType) => {
         // set filesystem root (if root node)
         this.fsRoot = schema.fsRoot.hasOwnProperty(modelType)
             ? schema.fsRoot[modelType]
-            :'Unknown';
+            : 'Unknown';
 
         // initialize model with input data
         this.setData = setData;
@@ -120,7 +120,7 @@ export const create = async (modelType) => {
              * @src public
              */
             addAttribute: {
-                value: (name, type, value=null) => {
+                value: (name, type, value = null) => {
                     this.attributes[name] = {
                         value: value,
                         key: name,
@@ -176,12 +176,12 @@ export const create = async (modelType) => {
             owner: {
                 get: () => {
                     return schema.attributes.hasOwnProperty('owner_id')
-                        ? this.attributes['owner_id']
+                        ? sanitize(this.attributes['owner_id'].value, 'integer')
                         : null;
                 },
                 set: (id) => {
                     if ((typeof id === 'number' || typeof id === 'string') && this.attributes.hasOwnProperty('owner_id')) {
-                        this.attributes['owner_id'].value = sanitize(id);
+                        this.attributes['owner_id'].value = sanitize(id, 'integer');
                     }
                 }
             },
@@ -194,7 +194,7 @@ export const create = async (modelType) => {
              * @src public
              */
             getValue: {
-                value: (field=null) => {
+                value: (field = null) => {
                     return field && this.attributes.hasOwnProperty(field)
                         ? this.attributes[field].value
                         : null;
@@ -227,7 +227,7 @@ export const create = async (modelType) => {
              * @src public
              */
             getData: {
-                value: (filter=[]) => {
+                value: (filter = []) => {
                     return Object.keys(this.attributes)
                         .filter(key => !filter.includes(key))
                         .reduce((o, key) => {
@@ -263,7 +263,7 @@ export const create = async (modelType) => {
  * @return {this}
  * @src public
  */
-function setData(data=null) {
+function setData(data = null) {
 
     // select object-defined data
     if (typeof data === 'object' && data !== null) {
@@ -298,7 +298,7 @@ function setData(data=null) {
  * @return {Promise} result
  */
 
-export const createNode = async function(item) {
+export const createNode = async function (item) {
 
     // NOTE: client undefined if connection fails.
     const client = await pool.connect();
@@ -310,16 +310,16 @@ export const createNode = async function(item) {
         let Node = await create('nodes');
 
         // get owner attributes (if they exist)
-        const { owner={} } = item || {};
-        const { value='' } = owner || {};
+        const { owner = {} } = item || {};
+        const { value = '' } = owner || {};
         let ownerAttrs = await nselect(value, client) || owner;
-        const { id=null, type=null, fs_path=item.fsRoot } = ownerAttrs || {};
+        const { id = null, type = null, fs_path = item.fsRoot } = ownerAttrs || {};
 
         // create new filesystem path using generated node label
         // - only return alphanumeric characters (also: '_', '-')
         const fsPath = path.join(
             fs_path,
-            item.label.replace(' ', '_').replace(/[^a-z0-9_-]/gi,'')
+            item.label.replace(' ', '_').replace(/[^a-z0-9_-]/gi, '')
         );
 
         // return node instance: set owner attribute values from
@@ -349,7 +349,7 @@ export const createNode = async function(item) {
  * @return {Promise} result
  */
 
-export const createFile = async function(fileData) {
+export const createFile = async function (fileData) {
 
     if (!fileData) return null;
 
@@ -358,15 +358,15 @@ export const createFile = async function(fileData) {
 
     // get additional file metadata from item
     const {
-        id='',
-        file_type='',
-        filename='',
-        mimetype='',
-        owner_type='',
-        owner_id='',
-        fs_path='',
-        file_size=0,
-        filename_tmp=''
+        id = '',
+        file_type = '',
+        filename = '',
+        mimetype = '',
+        owner_type = '',
+        owner_id = '',
+        fs_path = '',
+        file_size = 0,
+        filename_tmp = ''
     } = fileData || {};
 
 
@@ -386,3 +386,46 @@ export const createFile = async function(fileData) {
 };
 
 
+/**
+ * Returns a Promise that resolves to an object containing all
+ * model constructors, where each key is the singular model name
+ * and the value is the model constructor.
+ * 
+ * @public
+ * @return {Promise} result
+ */
+export const getConstructors = async function () {
+    // NOTE: client undefined if connection fails.
+    const client = await pool.connect();
+
+    try {
+        // create model constructor for all node types
+        const nodeTypes = await schemaConstructor.getNodeTypes(client);
+        const fileTypes = await schemaConstructor.getFileTypes(client);
+        const fileRelations = await schemaConstructor.getFileOwnerType(client);
+        // generate constructors for each node type
+        const constructors = {};
+        await Promise.all(nodeTypes.map(async (nodeType) => {
+            // add constructor to the constructors object
+            constructors[nodeType] = await create(nodeType);
+        }));
+        // generate constructors for each file type
+        await Promise.all(fileTypes.map(async (fileType) => {
+            // add constructor to the constructors object
+            constructors[fileType] = await create(fileType);
+        }));
+        // generate constructors for files and nodes
+        constructors['files'] = await create('files');
+        constructors['nodes'] = await create('nodes');
+        constructors['options'] = fileRelations;
+
+        return constructors;
+
+    } catch (err) {
+        console.error(err)
+        throw err;
+    } finally {
+        await client.release(true);
+    }
+
+}

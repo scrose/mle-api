@@ -3,18 +3,13 @@
  * File: nodes.routes.js
  * Copyright(c) 2021 Runtime Software Development Inc.
  * MIT Licensed
- */
-
-/**
- * Module dependencies
+ * 
+ * Description:
+ * Node data routes.
  */
 
 import * as nodesController from '../controllers/nodes.controller.js';
 import path from "path";
-
-/**
- * Express router
- */
 
 let routes = new NodesRoutes();
 export default routes;
@@ -73,6 +68,13 @@ function NodesRoutes() {
             put: null,
             post: null,
             delete: null,
-        }
+        },
+        remove: {
+            path: path.join('/nodes/remove'),
+            get: null,
+            put: null,
+            post: null,
+            delete: this.controller.remove,
+        },
     }
 }

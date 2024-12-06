@@ -19,6 +19,7 @@ import * as mserve from './metadata.services.js';
 import {getCaptureImage, getStatus} from './metadata.services.js';
 import * as fserve from './files.services.js';
 import {getFileLabel} from './files.services.js';
+import { mod } from 'mathjs';
 
 /**
  * Get node by ID. Returns single node object.
@@ -152,6 +153,7 @@ export const getTree = async function(model) {
             nodes.map(async (node) => {
                 const metadata = await selectByNode(node, client);
                 return {
+                    id: node?.id,
                     node: node,
                     label: await mserve.getNodeLabel(node, [], client),
                     type: node.type,
@@ -203,6 +205,8 @@ export const selectByOwner = async (id, client) => {
             const metadata = await selectByNode(node, client);
             const files = await fserve.selectByOwner(node.id, client);
             return {
+                id: node?.id,
+                model: node.type,
                 node: node,
                 label: await mserve.getNodeLabel(node, [], client),
                 type: node.type,

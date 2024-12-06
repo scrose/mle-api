@@ -16,6 +16,7 @@
  *
  * Revisions
  * - 31-12-2023   Added map objects to navigation tree data
+ * - 14-10-2024   Added bulk remover controller
  */
 
 import {prepare} from '../lib/api.utils.js';
@@ -270,4 +271,61 @@ export const search = async (req, res, next) => {
     }
 };
 
+/**
+     * Delete bulk records.
+     *
+     * @param req
+     * @param res
+     * @param next
+     * @src public
+     */
 
+export const remove = async (req, res, next) => {
+    // pool connection
+    const client = await pool.connect();
+    try {
+        const id = this.getId(req);
+
+        // retrieve item data
+        let itemData = await nserve.get(id, nodeType, client);
+
+        // item record and/or node/owner not found in database
+        if (!itemData || nodeType !== itemData?.type) return next(new Error('notFound'));
+
+        // force user to delete dependent nodes separately
+        // - use error code 23503 from FK violation
+        if (itemData?.hasDependents) return next(new Error('23503'));
+
+        // delete any capture comparisons if they exist
+        const comparisons = await getComparisonsMetadata(itemData?.node, client);
+        if (Array.isArray(comparisons) && comparisons.length > 0) {
+            await deleteComparisons(itemData?.node, client);
+        }
+
+        // get path of owner node in hierarchy (if exists)
+        model.setData(itemData.metadata);
+        const owner = await nserve.select(model?.owner, client);
+        const path = await nserve.getPath(owner);
+
+        // delete item (and attached files, if they exist)
+        const result = await mserve.remove(model, client);
+
+        res.status(200).json(
+            prepare({
+                view: 'remove',
+                model: model,
+                data: result,
+                message: {
+                    msg: `'${itemData.label}' ${humanize(model.name)} deleted successful!`,
+                    type: 'success'
+                },
+                path: path
+            }));
+
+    } catch (err) {
+        console.error(err)
+        return next(err);
+    } finally {
+        client.release(true);
+    }
+};

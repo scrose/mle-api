@@ -20,7 +20,6 @@
  */
 
 import * as controller from '../controllers/maps.controller.js';
-import * as otherController from "../controllers/other.controller.js";
 
 /**
  * Map data routes constructor

@@ -3,10 +3,9 @@
  * File: metadata.routes.js
  * Copyright(c) 2021 Runtime Software Development Inc.
  * MIT Licensed
- */
-
-/**
- * Module dependencies
+ * 
+ * Description
+ * Metadata routes.
  */
 
 import * as schema from '../services/schema.services.js';
@@ -89,10 +88,10 @@ function MetadataRoutes(metadataType) {
             path: path.join('/', this.model, 'remove', ':' + this.key),
             get: null,
             put: null,
-            post: this.model === 'participant_groups'
+            post: null,
+            delete: this.model === 'participant_groups'
                 ? this.controller.removeParticipants
                 : this.controller.remove,
-            delete: null,
         },
     }
 }

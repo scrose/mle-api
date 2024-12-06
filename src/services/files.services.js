@@ -5,27 +5,31 @@
  * MIT Licensed
  * 
  * Description: File services module for the API.
+ * 
+ * 
+ * Revisions:
+ * - 06-10-2024   Update file save methods
+ * 
+ * 
  */
 
 'use strict';
 
 import path from 'path';
 import fs from 'fs';
-import {Buffer} from 'node:buffer';
-import {copyFile, mkdir, rename, unlink} from 'fs/promises';
+import { Buffer } from 'node:buffer';
+import { mkdir, rename, unlink } from 'fs/promises';
 import pool from './db.services.js';
 import queries from '../queries/index.queries.js';
-import {sanitize} from '../lib/data.utils.js';
+import { sanitize, genUUID } from '../lib/data.utils.js';
 import * as cserve from './construct.services.js';
 import * as metaserve from '../services/metadata.services.js';
-import ModelServices from './model.services.js';
-import {allowedImageMIME, allowedMIME, extractFileLabel} from '../lib/file.utils.js';
-import {getImageURL, saveImage} from './images.services.js';
-import {updateComparisons} from "./comparisons.services.js";
+import { extractFileLabel } from '../lib/file.utils.js';
+import { getImageURL } from './images.services.js';
 import * as nserve from "./nodes.services.js";
 import AdmZip from 'adm-zip';
 import archiver from 'archiver';
-import {Readable} from "stream";
+import { Readable } from "stream";
 import queue from './queue.services.js';
 
 /**
@@ -38,7 +42,7 @@ const MAX_FILE_SIZE = 1e9;
  * Capture types.
  */
 
-const captureTypes = ['historic_captures', 'modern_captures'];
+const captureImageTypes = ['historic_images', 'modern_images'];
 
 /**
  * Get file record by ID. NOTE: returns single object.
@@ -49,12 +53,11 @@ const captureTypes = ['historic_captures', 'modern_captures'];
  * @return {Promise} result
  */
 
-export const select = async function(id, client ) {
+export const select = async function (id, client) {
     let { sql, data } = queries.files.select(id);
     let file = await client.query(sql, data);
     return file.rows[0];
 };
-
 
 /**
  * Get list of requested files by IDs.
@@ -106,48 +109,6 @@ export const filterFilesByID = async (fileIDs, file_type, offset, limit) => {
     }
 };
 
-/**
- * Get file label.
- *
- * @public
- * @param {Object} file
- * @param client
- * @return {Promise} result
- */
-
-export const getFileLabel = async (file, client) => {
-
-    if (!file) return '';
-    const {file_type = '', owner_id = '', filename = ''} = file || {};
-
-    // get image owner
-    const owner = await nserve.select(sanitize(owner_id, 'integer'), client);
-    // check that owner node exists
-    if (!owner) return '';
-    const metadata = await nserve.selectByNode(owner, client);
-
-    const queriesByType = {
-        historic_images: async () => {
-            const {fn_photo_reference = ''} = metadata || {};
-            return fn_photo_reference
-                ? fn_photo_reference
-                : extractFileLabel(filename, 'Capture Image');
-        },
-        modern_images: async () => {
-            const {fn_photo_reference = ''} = metadata || {};
-            return fn_photo_reference
-                ? fn_photo_reference
-                : extractFileLabel(filename, 'Capture Image');
-        },
-        default: async () => {
-            return extractFileLabel(filename, filename) || 'File Unknown';
-        }
-    };
-
-    return queriesByType.hasOwnProperty(file_type)
-        ? await queriesByType[file_type]() : queriesByType.default();
-
-};
 
 /**
  * Get file data by file ID. Returns single node object.
@@ -158,7 +119,7 @@ export const getFileLabel = async (file, client) => {
  * @return {Promise} result
  */
 
-export const get = async (id, client ) => {
+export const get = async (id, client) => {
 
     if (!id) return null;
 
@@ -171,7 +132,7 @@ export const get = async (id, client ) => {
     // get associated file metadata
     const metadata = await selectByFile(file, client) || {};
     const { type = '', secure_token = '' } = metadata || {};
-    const { file_type = '', filename = '', owner_id=0, file_size=0 } = file || {};
+    const { file_type = '', filename = '', owner_id = 0, file_size = 0 } = file || {};
     const owner = await nserve.select(owner_id, client) || {};
     const label = await getFileLabel(file, client);
 
@@ -201,7 +162,7 @@ export const get = async (id, client ) => {
  * @return {Promise} result
  */
 
-export const selectByOwner = async (id, client ) => {
+export const selectByOwner = async (id, client) => {
 
     // get all dependent files for requested owner
     const { sql, data } = queries.files.selectByOwner(id);
@@ -261,24 +222,24 @@ export const selectAllByOwner = async (id) => {
     // query handlers for different file types
     const handlers = {
         historic_images: async () => {
-            const {sql, data} = queries.files.getHistoricImageFilesByStationID(id);
-            const {rows = []} = await client.query(sql, data);
+            const { sql, data } = queries.files.getHistoricImageFilesByStationID(id);
+            const { rows = [] } = await client.query(sql, data);
             return rows.map(row => {
                 row.url = getImageURL('historic_images', row);
                 return row
             });
         },
         modern_images: async () => {
-            const {sql, data} = queries.files.getModernImageFilesByStationID(id);
-            const {rows = []} = await client.query(sql, data);
+            const { sql, data } = queries.files.getModernImageFilesByStationID(id);
+            const { rows = [] } = await client.query(sql, data);
             return rows.map(row => {
                 row.url = getImageURL('modern_images', row);
                 return row
             });
         },
         unsorted_images: async () => {
-            const {sql, data} = queries.files.getUnsortedImageFilesByStationID(id);
-            const {rows = []} = await client.query(sql, data);
+            const { sql, data } = queries.files.getUnsortedImageFilesByStationID(id);
+            const { rows = [] } = await client.query(sql, data);
             return rows.map(row => {
                 row.url = getImageURL('modern_images', row);
                 return row
@@ -310,7 +271,7 @@ export const selectAllByOwner = async (id) => {
         await client.query('ROLLBACK');
         throw err;
     } finally {
-        await client.release(true);
+        client.release(true);
     }
 };
 
@@ -342,12 +303,12 @@ export const hasFiles = async (id, client) => {
  * @return {Promise} result
  */
 
-export const selectByFile = async (file, client ) => {
+export const selectByFile = async (file, client) => {
     let { sql, data } = queries.defaults.selectByFile(file);
     return await client.query(sql, data)
         .then(res => {
             return res.hasOwnProperty('rows')
-            && res.rows.length > 0 ? res.rows[0] : {};
+                && res.rows.length > 0 ? res.rows[0] : {};
         });
 };
 
@@ -360,7 +321,7 @@ export const selectByFile = async (file, client ) => {
  * @return {Array} files
  */
 
-export const listFiles = (localPath, done=()=>{}) => {
+export const listFiles = (localPath, done = () => { }) => {
     // get root directories
     const lowResPath = process.env.LOWRES_PATH;
     const defaultPath = process.env.UPLOAD_DIR;
@@ -368,17 +329,17 @@ export const listFiles = (localPath, done=()=>{}) => {
     const dir = path.join(defaultPath, localPath);
 
     let results = [];
-    fs.readdir(dir, function(err, list) {
+    fs.readdir(dir, function (err, list) {
         if (err) return done(err);
         let i = 0;
         (function next() {
             let file = list[i++];
             if (!file) return done(null, results);
             file = path.resolve(dir, file);
-            fs.stat(file, function(err, stat) {
+            fs.stat(file, function (err, stat) {
                 console.log(stat)
                 if (stat && stat.isDirectory()) {
-                    listFiles(file, function(err, res) {
+                    listFiles(file, function (err, res) {
                         results = results.concat(res);
                         next();
                     });
@@ -392,10 +353,11 @@ export const listFiles = (localPath, done=()=>{}) => {
 };
 
 /**
- * Insert file(s) and file metadata.
- * - import data structure:
+ * Save file(s) to library and associated metadata records.
+ * - parameters data structure:
  *      files: [{
-            file: {
+            file: <File>
+            {
                 file_type: <FILE_TYPE>,
                 mimetype: <MIMETYPE>,
                 filename: <FILENAME>,
@@ -403,44 +365,141 @@ export const listFiles = (localPath, done=()=>{}) => {
                 fs_path: <FS_PATH>,
                 filename_tmp: <TMP_FILENAME>
             },
-            metadata: { additional file metadata, e.g. image metadata },
+            file_model: <FileModel>,
+            file_type: <string>>, 
+            encoding: <string>
         }],
- *      owner: { file owner instance }
+ *      owner: <OwnerModel>
  *
  * @public
- * @param {Object} importData
- * @param {String} model
- * @param {Object} fileOwner
- * @return {Promise} result
+ * @param {Array<Model>} files - files including file metadata owners (based on file type)
+ * @param {Model} owner - file owner as model instance
+ * @return {Promise} result - confirmation data with inserted file and file metadata
  */
+export const upload = async (files, owner) => {
 
-export const insert = async (files, owner, client) => {
+    // connect to DB
+    const client = await pool.connect();
+
     try {
 
         // reject null parameters
-        if (Array.isArray(files) && files.length === 0 || !owner ) {
+        if (Array.isArray(files) && files.length === 0 || !owner) {
             return null;
         }
 
-        // get file options
-        const options = await metaserve.getMetadataOptions(client);
-
         // saves attached files and inserts metadata record for each
         return await Promise
-            .all(Object.values(files)
-            .map( async (file) => {
-                const FileModel = await cserve.create(file?.file_type);
-                const fileModel = new FileModel(file.metadata); 
-                // set owner id and node type
+            .all(files.map(async ({ file, file_model, file_type }) => {
+                // generate unique filename ID token
+                const imgToken = genUUID();
+                // set owner id and node type for both file node and file model metadata
                 file.setValue('owner_id', owner.id);
                 file.setValue('owner_type', owner.name);
-                return saveFile(file, owner, options, client);
-            }))
+                file_model.setValue('owner_id', owner.id);
+                file_model.setValue('secure_token', imgToken);
+
+                // insert token into filename
+                const filename = file.getValue('filename');
+                const tokenizedFilename = [
+                    filename.slice(0, filename.lastIndexOf('.')),
+                    imgToken,
+                    filename.slice(filename.lastIndexOf('.'))].join('');
+
+                // update file system path
+                const dirPath = path.join(file_model.getValue('fs_path'));
+                // capture images (include image state)
+                if (captureImageTypes.includes(file_type)) {
+                    // set file path (with fs_path) in metadata
+                    const imageState = file_model.getValue('image_state');
+                    const fileSystemPath = path.join(dirPath, imageState, tokenizedFilename);
+                    file.setValue('fs_path', fileSystemPath);
+                } else {
+                    // set file path (with fs_path) in metadata
+                    const fileSystemPath = path.join(dirPath, file_type, tokenizedFilename);
+                    file.setValue('fs_path', fileSystemPath);
+                }
+                
+                // get file size of temporary file
+                const filePathTmp = path.join(process.env.TMP_DIR, file.getValue('filename_tmp'))
+                const fileSize = (await fs.promises.stat(filePathTmp)).size;
+                // check file size against maximum file size
+                if (fileSize > MAX_FILE_SIZE) throw new Error('overMaxSize');
+                // set file size (bytes) in metadata
+                file.setValue('file_size', fileSize);
+
+                // save file metadata records
+                const result = await insert(file, file_model, client);
+
+                console.log('File insert result', result);
+                
+                // add file to file processing queue
+                const submit = await queue.add({ file: result?.file, file_model: result?.file_model, owner: owner });
+                console.log('Job added to queue', submit);
+
+            }));
 
     } catch (err) {
         throw err;
     }
+    finally {
+        client.release(true);
+    }
 };
+
+
+/**
+ * Copies a file from source path to destination path.
+ *
+ * @public
+ * @param {String} srcPath - Source file path.
+ * @param {String} dstPath - Destination file path.
+ * @return {Promise} result - Confirmation data with copied file.
+ */
+export const uploadFile = async (srcPath, dstPath) => {
+
+    // copy file to data storage
+    return await copyFile(srcPath, dstPath, fs.constants.COPYFILE_EXCL);
+}
+
+
+/**
+ * Insert file metadata record to database.
+ *
+ * @public
+ * @param {Object} file - File node data with all required fields.
+ * @param {Object} fileModel - File model data with all required fields.
+ * @param {Object} client - Db client instance.
+ * @return {Promise} result - Confirmation data with inserted file and file metadata.
+ */
+export const insert = async (file, fileModel, client) => {
+
+    // create file node instance
+    // - use file model instance with extracted file data
+    const stmtFileNode = queries.files.insert(file);
+    let fileRes = await client.query(stmtFileNode.sql, stmtFileNode.data);
+
+    // update file metadata files_id with created file ID, defined image state
+    const { id = '' } = fileRes.hasOwnProperty('rows') && fileRes.rows.length > 0
+        ? fileRes.rows[0] || {}
+        : {};
+    // set file owner files_id to resultant file node ID
+    fileModel.id = id;
+
+    // insert file model metadata as new record
+    // NOTE: need to define different query than current services object model
+    const stmtFileData = queries.defaults.insert(fileModel)(fileModel);
+    let modelRes = await client.query(stmtFileData.sql, stmtFileData.data);
+
+    // update file and owner metadata in returned models
+    if (modelRes.hasOwnProperty('rows') && modelRes.rows.length > 0) {
+        file.setData(fileRes.rows[0]);
+        fileModel.setData(modelRes.rows[0]);
+        return { file: file, file_model: fileModel };
+    }
+    else return null;
+
+}
 
 /**
  * Update file metadata in existing record.
@@ -522,7 +581,7 @@ export const download = async (res, src) => {
  * @public
  */
 
-export const compress = async (files={}, version) => {
+export const compress = async (files = {}, version) => {
 
     // creating new archive (ADM-ZIP)
     let zip = new AdmZip();
@@ -538,7 +597,8 @@ export const compress = async (files={}, version) => {
                     // - only include files that exist
                     if (fs.existsSync(filePath)) zip.addLocalFile(filePath, fileType);
                 })
-            )}
+            )
+        }
         )
     );
 
@@ -556,9 +616,9 @@ export const compress = async (files={}, version) => {
  * @return {String} result
  */
 
-export const getFilePath = (file, version='medium' ) => {
+export const getFilePath = (file, version = 'medium') => {
 
-    const { fs_path = '', secure_token = '', file_type='' } = file || {};
+    const { fs_path = '', secure_token = '', file_type = '' } = file || {};
     const lowResPath = process.env.LOWRES_PATH;
     const defaultPath = process.env.UPLOAD_DIR;
 
@@ -592,44 +652,6 @@ export const getFilePath = (file, version='medium' ) => {
         : fileHandlers.default();
 };
 
-/**
- * Insert file metadata to database.
- *
- * @src public
- * @param importData
- * @param owner
- * @param imageState
- * @param callback
- * @param client
- */
-
-export const insertFile = async (file, owner, client) => {
-
-
-    // create file node instance
-    // - use file model instance with extracted file data
-    const stmtFileNode = queries.files.insert(file);
-    let fileRes = await client.query(stmtFileNode.sql, stmtFileNode.data);
-
-    // update file metadata files_id with created file ID, defined image state
-    const { id = '' } = fileRes.hasOwnProperty('rows') && fileRes.rows.length > 0
-        ? fileRes.rows[0] || {}
-        : {};
-    fileItem.id = id;
-
-    // insert file metadata as new record
-    // NOTE: need to define different query than current services object model
-    const stmtFileData = queries.defaults.insert(fileItem)(fileItem);
-    let modelRes = await client.query(stmtFileData.sql, stmtFileData.data);
-
-    // return confirmation data
-    return modelRes.hasOwnProperty('rows') && modelRes.rows.length > 0
-        ? {
-            file: fileRes.rows[0],
-            metadata: modelRes.rows[0],
-        }
-        : null;
-}
 
 /**
  * Move files to new owner (container)
@@ -647,9 +669,9 @@ export const moveFiles = async (files, node, client) => {
             await Promise.all(
                 // handle move for each file
                 files[fileType].map(async (fileData) => {
-                    const {metadata = {}, file = {}} = fileData || {};
-                    const {image_state = '', secure_token = ''} = metadata || {};
-                    const {filename = '', file_type = ''} = file || {};
+                    const { metadata = {}, file = {} } = fileData || {};
+                    const { image_state = '', secure_token = '' } = metadata || {};
+                    const { filename = '', file_type = '' } = file || {};
 
                     // insert token into filename
                     const tokenizedFilename = [
@@ -666,7 +688,7 @@ export const moveFiles = async (files, node, client) => {
                     // create new directory and file path (create directory if does not exist)
                     const newFileNodePath = path.join(node.getValue('fs_path'), image_state || file_type);
                     const newFileUploadDir = path.join(process.env.UPLOAD_DIR, newFileNodePath);
-                    await mkdir(newFileUploadDir, {recursive: true});
+                    await mkdir(newFileUploadDir, { recursive: true });
                     // move file to new directory path
                     const newFileUploadPath = path.join(newFileUploadDir, tokenizedFilename);
                     // rename file path (if exists)
@@ -698,12 +720,12 @@ export const moveFiles = async (files, node, client) => {
  * @public
  */
 
-export const removeAll = async (files=null, client ) => {
+export const removeAll = async (files = null, client) => {
     await Promise.all(
         Object.keys(files).map(
             async (file_type) => {
                 await Promise.all(
-                    files[file_type].map( async (file) => {
+                    files[file_type].map(async (file) => {
                         return await remove(file, client);
                     }));
             })
@@ -719,9 +741,9 @@ export const removeAll = async (files=null, client ) => {
  * @public
  */
 
-export const remove = async (fileItem=null, client ) => {
-    const { file=null, url=null } = fileItem || {};
-    const { id='', fs_path='' } = file || {};
+export const remove = async (fileItem = null, client) => {
+    const { file = null, url = null } = fileItem || {};
+    const { id = '', fs_path = '' } = file || {};
 
     // create filepath array (include original or raw file)
     let filePaths = [path.join(process.env.UPLOAD_DIR, fs_path)];
@@ -736,7 +758,7 @@ export const remove = async (fileItem=null, client ) => {
     }
 
     // [1] remove file + metadata records
-    const {sql, data} = queries.files.remove(id);
+    const { sql, data } = queries.files.remove(id);
     const response = await client.query(sql, data) || [];
 
     // [2] delete attached files
@@ -757,7 +779,7 @@ export const remove = async (fileItem=null, client ) => {
  * @public
  */
 
-export const deleteFiles = async (filePaths=[]) => {
+export const deleteFiles = async (filePaths = []) => {
     await Promise.all(
         filePaths.map(async (filePath) => {
             fs.stat(filePath, async (err) => {
@@ -786,9 +808,9 @@ export const deleteFiles = async (filePaths=[]) => {
  * @param metadata
  */
 
-export const streamArchive = async (res, files={}, version, metadata={}) => {
+export const streamArchive = async (res, files = {}, version, metadata = {}) => {
 
-    res.on('error',function(err) {
+    res.on('error', function (err) {
         console.error(err);
         res.status(404).end();
     });
@@ -800,7 +822,7 @@ export const streamArchive = async (res, files={}, version, metadata={}) => {
 
     // listen for all archive data to be written
     // 'close' event is fired only when a file descriptor is involved
-    res.on('close', function() {
+    res.on('close', function () {
         console.log(archive.pointer() + ' total bytes');
         console.log('archiver has been finalized and the output file descriptor has closed.');
     });
@@ -808,12 +830,12 @@ export const streamArchive = async (res, files={}, version, metadata={}) => {
     // This event is fired when the data source is drained no matter what was the data source.
     // It is not part of this library but rather from the NodeJS Stream API.
     // @see: https://nodejs.org/api/stream.html#stream_event_end
-    res.on('end', function() {
+    res.on('end', function () {
         console.log('Data has been drained');
     });
 
     // good practice to catch warnings (ie stat failures and other non-blocking errors)
-    archive.on('warning', function(err) {
+    archive.on('warning', function (err) {
         if (err.code === 'ENOENT') {
             // log warning
         } else {
@@ -823,7 +845,7 @@ export const streamArchive = async (res, files={}, version, metadata={}) => {
     });
 
     // good practice to catch this error explicitly
-    archive.on('error', function(err) {
+    archive.on('error', function (err) {
         throw err;
     });
 
@@ -837,15 +859,16 @@ export const streamArchive = async (res, files={}, version, metadata={}) => {
                 files[fileType].map(async (file, index) => {
                     // get file path for given version type
                     const filePath = getFilePath(file, version);
-                    const {filename=``} = file || {};
+                    const { filename = `` } = file || {};
                     // places file in a subfolder labelled by image/file type
                     // - only include files that exist
                     if (fs.existsSync(filePath)) {
                         // append a file
-                        archive.file(filePath, { name: path.join(fileType, filename)});
+                        archive.file(filePath, { name: path.join(fileType, filename) });
                     }
                 })
-            )}
+            )
+        }
         )
     );
 
@@ -876,7 +899,7 @@ export const streamDownload = (res, buffer) => {
 
     // pipe stream to response
     rs.pipe(res);
-    rs.on('error',function(err) {
+    rs.on('error', function (err) {
         console.error(err);
         res.status(404).end();
     });
@@ -904,13 +927,13 @@ export const bulkDownload = async (req, res, next, version, client) => {
 
     // extract query parameters
     const {
-        file_id='',
-        id='',
-        historic_images='',
-        modern_images='',
-        metadata_files='',
-        supplemental_images='',
-        unsorted_images=''
+        file_id = '',
+        id = '',
+        historic_images = '',
+        modern_images = '',
+        metadata_files = '',
+        supplemental_images = '',
+        unsorted_images = ''
     } = req.query || {};
 
     if (
@@ -928,8 +951,8 @@ export const bulkDownload = async (req, res, next, version, client) => {
         // get owner node; check that node exists in database
         // and corresponds to requested owner type.
         const fileData = await get(sanitize(file_id, 'integer'), client);
-        const { file={} } = fileData || {};
-        const { filename='', mime_type='' } = file || {};
+        const { file = {} } = fileData || {};
+        const { filename = '', mime_type = '' } = file || {};
         const filePath = getFilePath(file, version);
 
         // file does not exist
@@ -985,7 +1008,7 @@ export const bulkDownload = async (req, res, next, version, client) => {
 
     // stream archive data for either single file or compressed image folder
     return singleFile
-        ? await streamArchive(res, {file: [singleFile]}, version)
+        ? await streamArchive(res, { file: [singleFile] }, version)
         : await streamArchive(res, {
             'historic_images': historicFiles.results,
             'modern_images': modernFiles.results,
@@ -995,3 +1018,65 @@ export const bulkDownload = async (req, res, next, version, client) => {
         }, version);
 }
 
+
+/**
+ * Get file label.
+ * - Extracts label for given file based on file type and owner information.
+ * - If owner information does not exist, use filename as label.
+ * - If file type is not recognized, use filename as label.
+ *
+ * @public
+ * @param {Object} file
+ * @param client
+ * @return {Promise} result
+ */
+export const getFileLabel = async (file, client) => {
+
+    if (!file) return '';
+    const { file_type = '', owner_id = '', filename = '' } = file || {};
+
+    // get image owner
+    const owner = await nserve.select(sanitize(owner_id, 'integer'), client);
+    // check that owner node exists
+    if (!owner) return '';
+    const metadata = await nserve.selectByNode(owner, client);
+
+    const queriesByType = {
+        /**
+         * Historic Capture Images
+         * - If owner node has a fn_photo_reference,
+         *   use that as the label.
+         * - Otherwise, use the file name as the label.
+         */
+        historic_images: async () => {
+            const { fn_photo_reference = '' } = metadata || {};
+            return fn_photo_reference
+                ? fn_photo_reference
+                : extractFileLabel(filename, 'Capture Image');
+        },
+        /**
+         * Modern Capture Images
+         * - If owner node has a fn_photo_reference,
+         *   use that as the label.
+         * - Otherwise, use the file name as the label.
+         */
+        modern_images: async () => {
+            const { fn_photo_reference = '' } = metadata || {};
+            return fn_photo_reference
+                ? fn_photo_reference
+                : extractFileLabel(filename, 'Capture Image');
+        },
+        /**
+         * Default (Metadata Files)
+         * - If file type is not recognized,
+         *   use the file name as the label.
+         */
+        default: async () => {
+            return extractFileLabel(filename, filename) || 'File Unknown';
+        }
+    };
+
+    return queriesByType.hasOwnProperty(file_type)
+        ? await queriesByType[file_type]() : queriesByType.default();
+
+};

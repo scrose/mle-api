@@ -3,6 +3,23 @@
  * File: users.controller.js
  * Copyright(c) 2021 Runtime Software Development Inc.
  * MIT Licensed
+ * 
+ * Description
+ * 
+ * 1. auth.validate(access_token): This service is called 
+ * in the login function to check if the user is already 
+ * logged in.
+ * 
+ * 2. auth.authenticate(credentials): This service is 
+ * called in the login function to authenticate the user's 
+ * credentials against Keycloak.
+ * 
+ * 3. auth.logout(access_token, refresh_token): This service 
+ * is called in the logout function to log out the user's 
+ * session in Keycloak.
+ * 
+ * 4. auth.refresh(req): This service is called in the refresh 
+ * function to refresh the user's token.
  */
 
 /**
@@ -23,21 +40,36 @@ import { getRoleData } from '../services/users.services.js';
 
 let roleLabels = {};
 
+/**
+ * Initialize controller. Called once on controller load.
+ * Gets user role labels from database.
+ *
+ * @src public
+ */
 export const init = async () => {
     // get designated role labels
     roleLabels = await getRoleData();
 };
 
+
 /**
  * User sign-in using email and password.
  *
- * @param req
- * @param res
+ * @param {Object} req
+ * @param {Object} res
  * @param {Function} next
  * @method post
  * @src public
+ *
+ * Checks if user is currently logged-in, and if so, throws a redundantLogin error.
+ * Otherwise, validates user credentials and authenticates against Keycloak.
+ *
+ * If authentication is successful, sends an access token and refresh token
+ * to the client inside a cookie, and returns a 200 response with a success
+ * message, user email, user role, and user role label.
+ *
+ * If authentication fails, throws an error.
  */
-
 export const login = async (req, res, next) => {
 
     // get access token from request cookie
@@ -97,13 +129,19 @@ export const login = async (req, res, next) => {
 /**
  * User sign-out.
  *
- * @param req
- * @param res
+ * @param {Object} req
+ * @param {Object} res
  * @param {Function} next
  * @method post
  * @src public
+ *
+ * Gets access token from signed cookie, logs out the user's session in Keycloak,
+ * and then removes the access token and refresh token from the signed cookie.
+ *
+ * If Keycloak did not properly log out user, throws a logoutFailed error.
+ *
+ * If logout is successful, returns a 200 response with a success message.
  */
-
 export const logout = async (req, res, next) => {
 
     // get access token from cookie
@@ -133,13 +171,19 @@ export const logout = async (req, res, next) => {
 /**
  * Refresh user token.
  *
- * @param req
- * @param res
+ * If refresh token is invalid or not found, sets an empty value for both
+ * access token and refresh token inside the client's cookies.
+ *
+ * If refresh token is valid, refreshes the token (Keycloak API), stores
+ * the new access token inside an http-only cookie, and returns a 200
+ * response with a success message and user data.
+ *
+ * @param {Object} req
+ * @param {Object} res
  * @param {Function} next
  * @method get
  * @src public
  */
-
 export const refresh = async (req, res, next) => {
 
     // refresh token (Keycloak API)
@@ -174,7 +218,8 @@ export const refresh = async (req, res, next) => {
                     user: {
                         email: data.email,
                         role: data.roles,
-                        label: role.label
+                        label: role.label,
+                        expiry: data.exp
                     }
                 })
             );

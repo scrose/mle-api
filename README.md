@@ -1,7 +1,6 @@
 # Mountain Legacy Explorer API
-=====================
 
-### Overview
+## Overview
 ------------
 
 The Mountain Legacy Explorer (MLE) API is a metadata management tool designed to browse and edit the Mountain Legacy project (MLP) collection. This API provides a platform for viewing both historic and corresponding modern survey images.
@@ -11,7 +10,7 @@ The Mountain Legacy Explorer (MLE) API is a metadata management tool designed to
  The [Mountain Legacy Project](http://mountainlegacy.ca/) at the University of Victoria supports numerous research initiatives exploring the use of repeat photography to study ecosystem, landscape, and anthropogenic changes. MLP hosts the largest systematic collection of mountain photographs, with over 120,000 high-resolution historic (grayscale) survey photographs of Canada’s Western mountains captured from the 1880s through the 1950s, with over 9,000 corresponding modern (colour) repeat images. 
 
 
-### API Components
+## API Components
 ------------------
 
 The MLE API consists of the following components:
@@ -20,7 +19,7 @@ The MLE API consists of the following components:
 *   **MLE API** (NodeJS): The backend API for managing data and business logic.
 *   **MLE Image Queue** (NodeJS): A service for processing image-related tasks asynchronously.
 
-### API Endpoints
+## API Endpoints
 ----------------
 
 The MLE API provides the following endpoints:
@@ -37,7 +36,7 @@ The MLE API provides the following endpoints:
 *   **PUT /fields/{id}**: Update a specific field by ID.
 *   **DELETE /fields/{id}**: Delete a specific field by ID.
 
-### API Models
+## API Models
 --------------
 
 The MLE API uses the following models:
@@ -45,7 +44,7 @@ The MLE API uses the following models:
 *   **File**: Represents a file in the MLP collection.
 *   **Field**: Represents a field in the MLP collection.
 
-### API Authentication
+## API Authentication
 ----------------------
 
 The MLE API uses authentication to ensure secure access to the API endpoints. The API supports the following authentication methods:
@@ -53,7 +52,7 @@ The MLE API uses authentication to ensure secure access to the API endpoints. Th
 *   **Basic Auth**: Use a username and password to authenticate.
 *   **Token Auth**: Use a token to authenticate.
 
-### API Error Handling
+## API Error Handling
 ----------------------
 
 The MLE API uses error handling to ensure that errors are properly handled and returned to the client. The API returns error responses in the following format:
@@ -61,17 +60,17 @@ The MLE API uses error handling to ensure that errors are properly handled and r
 *   **Error Code**: A unique error code.
 *   **Error Message**: A human-readable error message.
 
-### API Documentation
+## API Documentation
 ----------------------
 
 This API documentation provides detailed information about the API endpoints, models, and authentication methods. It is recommended that you read this documentation carefully before using the API.
 
-### API License
+## API License
 ----------------
 
 The MLE API is licensed under the MIT License.
 
-### API Contributing
+## API Contributing
 --------------------
 
 Contributions to the MLE API are welcome. Please submit a pull request to the repository with your changes.
@@ -87,7 +86,7 @@ If you encounter any issues with the MLE API, please submit an issue to the repo
 Developed and maintained by Runtime Software Development Inc.
 
 
-### Repository
+## Repository
 --------------
 
 The MLE API repository is located at [https://github.com/scrose/mle-api](https://github.com/scrose/mle-api).

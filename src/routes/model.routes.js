@@ -29,6 +29,8 @@ function ModelRoutes(modelType) {
     // initialize model controller
     this.controller = new ModelController(this.model);
 
+    const rootNodes = ['projects', 'map_objects', 'surveyors'];
+
     // add controller routes
     this.routes = {
         show: {
@@ -39,7 +41,7 @@ function ModelRoutes(modelType) {
             delete: null,
         },
         create: {
-            path: this.model === 'surveyors' || this.model === 'projects' || this.model === 'map_objects'
+            path: rootNodes.includes(this.model)
                     ? path.join('/', this.model, 'new')
                     : path.join('/', this.model, 'new', ':owner_id'),
             get: this.controller.add,
@@ -58,8 +60,8 @@ function ModelRoutes(modelType) {
             path: path.join('/', this.model, 'remove', ':' + this.key),
             get: null,
             put: null,
-            post: this.controller.remove,
-            delete: null,
+            post: null,
+            delete: this.controller.remove,
         }
     };
 

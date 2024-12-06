@@ -21,7 +21,6 @@ import pool from '../services/db.services.js';
 import fs from "fs";
 import path from 'path';
 import { getQueueJobs } from '../services/queue.services.js';
-import mime from 'mime-types';
 
 /**
  * Controller initialization.
@@ -83,6 +82,7 @@ export const logs = async (_, res, next) => {
               const logFiles = files.filter(file => path.extname(file) === '.log');
               const logContents = [];
         
+              // read each log file
               logFiles.forEach(file => {
                 const filePath = path.join(logDir, file);
                 fs.readFile(filePath, 'utf8', (err, data) => {
@@ -120,12 +120,12 @@ export const logs = async (_, res, next) => {
  */
 export const jobs = async (_, res, next) => {
     try {
-        const { data, counts } = await getQueueJobs() || {};
+        const { data, counts, status } = await getQueueJobs() || {};
         // get list of Redis queue items
         res.status(200).json(
             prepare({
                 view: 'dashboard',
-                data: { jobs: data || [], counts: counts || {} }, // data,
+                data: { jobs: data || [], counts: counts || {}, status }, // data,
             }));
     } catch (err) {
         return next(err);

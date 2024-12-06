@@ -24,6 +24,20 @@ export function types() {
 }
 
 /**
+ * Query: Get all file relations listed.
+ *
+ * @return {Object} query binding
+ */
+
+export function relations() {
+    return {
+        sql: `SELECT *
+              FROM file_relations;`,
+        data: [],
+    };
+}
+
+/**
  * Query: Get all files by file type.
  *
  * @param {String} fileType

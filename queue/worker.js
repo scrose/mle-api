@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 
 /*!
- * MLE.QUEUE
+ * MLE.Queue.Worker
  * File: worker.js
  * Copyright(c) 2024 Runtime Software Development Inc.
  * Version 2.0
  * MIT Licensed
  *
- * ----------
  * Description
  *
  * File processing queue API.
  *
- * ---------
  * Revisions
  * - 29-07-2023   Refactored out Redis connection as separate queue service.
  */
@@ -21,12 +19,8 @@
 
 import express from 'express';
 import Queue from 'bull';
-import { processJob, addQueueJob } from "./worker.services.js";
+import { processJob } from './worker.services.js'; 
 
-/**
- * Create Queue API application.
- * @private
- */
 
 /**
  * Initialize main Express instance.
@@ -38,18 +32,19 @@ const app = express();
  * Get port from environment and store in Express
  */
 
-const host = process.env.QUEUE_HOST;
-const port = process.env.QUEUE_PORT;
+const QUEUE_HOST = process.env.QUEUE_HOST;
+const QUEUE_PORT = process.env.QUEUE_PORT;
+const CONCURRENT_JOBS = 5;
 
 // set queue port
-app.set('port', port);
+app.set('port', QUEUE_PORT);
 
 app.get('/', (_, res) => {
-    res.send('No Access')
+    res.send('Ready')
 })
 
-app.listen(port, () => {
-    console.log(`Queue listening on ${host}:${port}`);
+app.listen(QUEUE_PORT, () => {
+    console.log(`Queue listening on ${QUEUE_HOST}:${QUEUE_PORT}`);
     console.log('\n- (Node) Exposed Garbage Collection:', !!global.gc);
 });
 
@@ -60,11 +55,13 @@ app.listen(port, () => {
  */
 
 try {
-    let queue = new Queue('imageProcessor', {
+    // Define the queue service limited to maximum concurrent jobs
+    let queue = new Queue('file_processor', {
         redis: {
             host: process.env.REDIS_HOST,
             port: process.env.REDIS_PORT,
         },
+        concurrency: CONCURRENT_JOBS
     });
 
     // Connect to Redis Queue and process jobs
@@ -96,17 +93,11 @@ try {
 
     // Connect to Redis Queue and process jobs
     queue.process(async (job) => {
-
         try {
-            const { data } = job || {};
-            console.log(`Job ${job.id} [PENDING]; Uploading File: ${data.src}\n`);
-            const { src } = await processJob(job, console.error);
-            await addQueueJob(null, job);
-            console.log(`Job ${job.id} [COMPLETED]; Uploading File: ${src}\n`);
-
+            console.log(`[PENDING] JOB No. ${job.id} / TYPE ${job.name} - ${new Date(job.timestamp).toLocaleString()}`);
+            await processJob(job, console.error);
         } catch (error) {
             console.error('Error processing job:', error);
-            await addQueueJob(error, job);
         } finally {
             // force garbage collection to prevent heap memory leaks
             if (global.gc) {
